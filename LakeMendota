@@ -6,7 +6,7 @@ Created on Thu Dec 13 22:29:08 2018
 @author: brendancox
 """
 
-#%% DATA IS BEAUTIFUL
+#%% IMPORT
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
