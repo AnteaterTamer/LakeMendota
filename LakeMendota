@@ -11,6 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+from sklearn.linear_model import LinearRegression
 
 # white, whitegrid, dark, darkgrid, ticks
 # also call sns.despine
@@ -31,112 +32,135 @@ df = df.groupby(['year']).agg({'days':'sum', 'date_closed':'min', 'date_opened':
 minYear = df['year'].min()
 maxYear = df['year'].max()
 
+cutoffYear = 1981
+
 medianAllYears = df['days'].median()
-medianPre1980  = df.loc[df['year'] < 1980, 'days'].median()
-median19001979 = df.loc[df['year'].between(1900, 1979), 'days'].median()
-medianPost1980 = df.loc[df['year'] >= 1980, 'days'].median()
+medianPreCutoff  = df.loc[df['year'] <= cutoffYear, 'days'].median()
+median1900toCutoff = df.loc[df['year'].between(1900, cutoffYear), 'days'].median()
+medianPostCutoff = df.loc[df['year'] > cutoffYear, 'days'].median()
 
 meanAllYears = df['days'].mean()
-meanPre1980  = df.loc[df['year'] < 1980, 'days'].mean()
-mean19001979 = df.loc[df['year'].between(1900, 1979), 'days'].mean()
-meanPost1980 = df.loc[df['year'] >= 1980, 'days'].mean()
+meanPreCutoff  = df.loc[df['year'] < cutoffYear, 'days'].mean()
+mean1900toCutoff = df.loc[df['year'].between(1900, cutoffYear), 'days'].mean()
+meanPostCutoff = df.loc[df['year'] > cutoffYear, 'days'].mean()
 
-df['daysRollAvg5'] = df['days'].rolling(5).mean()
-df['daysRollAvg10'] = df['days'].rolling(10).mean()
+df['daysRoll5Avg'] = df['days'].rolling(5).mean()
+df['daysRoll5Std'] = df['days'].rolling(5).std()
+df['daysRoll10Avg'] = df['days'].rolling(10).mean()
+
+minDaysPreCutoff = df.loc[df['year'] <= cutoffYear, 'daysRoll5Avg'].min()
+maxDaysPreCutoff = df.loc[df['year'] <= cutoffYear, 'daysRoll5Avg'].max()
+
+
+# COUNTERFACTUAL 
+# counterfactual - actual + diff. between pre- and post-cutoff median
+df['cf'] = df.loc[df['year'] > cutoffYear, 'days'] + (medianPreCutoff - medianPostCutoff)
+#df['cfRoll5Avg'] = df['cf'].rolling(5).mean()
+
+# define rolling avg counterfactual as reg. rolling avg. + diff. in median
+df['cfRoll5Avg'] = df.loc[df['year'] > cutoffYear, 'daysRoll5Avg'] + (medianPreCutoff - medianPostCutoff)
+# replace year after cutoff with actual rolling avg. to 'connect' actual & counterfactual lines
+#df.loc[df['year'] == (cutoffYear + 1), 'cfRoll5Avg'] = df['daysRoll5Avg']
+
+# check that median of counterfactual == pre-cutoff
+mediancf = df.loc[df['year'] > cutoffYear, 'cf'].median()
+meancf = df.loc[df['year'] > cutoffYear, 'cf'].mean()
+
+df['daysFromHistMedian'] = df['days'] - medianPreCutoff
+df['daysFromHistMedianRoll5Avg'] = df['daysFromHistMedian'].rolling(5).mean()
+
 ####################
-# TODO: Revise this as comparison against historical median ???
+'''
+# Diff. from median
 df['daysFromMedian'] = df['days'] - medianAllYears
 df['daysFromMedianAbs'] = (df['days'] - medianAllYears).abs()
 
 df['cumDaysFromMedian'] = df['daysFromMedian'].cumsum()
 
-df['daysFromHistMedian'] = df['days'] - medianPre1980
-df['daysFromHistMedianRollAvg5'] = df['daysFromHistMedian'].rolling(5).mean()
-
-
-df['missedIceDays'] = df.loc[df['year'] >= 1980, 'daysFromHistMedian'].cumsum() * -1
-
-# counterfactual - actual + diff. between pre-1980 and post-1980 median
-df['cf'] = df.loc[df['year'] >= 1980, 'days'] + (medianPre1980 - medianPost1980)
-#df['cfRollAvg5'] = df['cf'].rolling(5).mean()
-
-# define rolling avg counterfactual as reg. rolling avg. + diff. in median
-# add line equal to actual value for 1980 & 1981 to make line 'split off'
-df['cfRollAvg5'] = df.loc[df['year'] >= 1982, 'daysRollAvg5'] + (medianPre1980 - medianPost1980)
-df.loc[df['year'] == 1981, 'cfRollAvg5'] = df['daysRollAvg5']
-
-# check that median of counterfactual == pre-1980
-mediancf = df.loc[df['year'] >= 1980, 'cf'].median()
-
-#df.loc[df['year'].between(1980, 1984), 'counterfactualRollAvg5'] = df['counterfactual']
-
-#df.loc[df['year'] >= 1980, 'days'] - medianPre1980
-
-minDaysPre1980 = df.loc[df['year'] < 1980, 'daysRollAvg5'].min()
-maxDaysPre1980 = df.loc[df['year'] < 1980, 'daysRollAvg5'].max()
-
-
-#%% quick plots
-df.plot.line(x='year', y=['days', 'daysRollAvg5', 'daysRollAvg10'])
+df['missedIceDays'] = df.loc[df['year'] > cutoffYear, 'daysFromHistMedian'].cumsum() * -1
+'''
+##############################
+# quick plots
+df.plot.line(x='year', y=['days', 'daysRoll5Avg', 'daysRoll10Avg'])
 plt.show()
 
-df.plot.line(x='year', y=['daysFromMedian', 'daysFromHistMedian'])
-plt.show()
+#df.plot.line(x='year', y=['daysFromMedian', 'daysFromHistMedian'])
+#plt.show()
 
-df.plot.line(x='year', y=['cumDaysFromMedian', 'missedIceDays'])
-plt.axhline(y=0)
-plt.show()
+#df.plot.line(x='year', y=['cumDaysFromMedian', 'missedIceDays'])
+#plt.axhline(y=0)
+#plt.show()
 
-# FIXME: Days from median currently same as plot itself...
+#%% REGRESSIONS
+# Create regression data set since there are missing values for rolling avg.
+#dfReg = df.loc[~(df['daysRoll5Avg'].isnull())].copy()
+dfReg = df.loc[~(df['days'].isnull())].copy()
+dfReg['postCutoff'] = dfReg['year'] > cutoffYear
+dfReg['yearPost'] = dfReg['year'] * dfReg['postCutoff'] # allows for separate slope post-cutoff
+
+# Regression model
+xVars = ['year', 'postCutoff', 'yearPost']
+#yVar = 'daysRoll5Avg'
+yVar = 'days'
+allVars = xVars.copy()
+allVars.append(yVar)
+
+X = dfReg[xVars] #dataframe
+y = dfReg[yVar] #series
+
+reg = LinearRegression().fit(X, y)
+print('Coeff.: \n', reg.coef_)
+alpha = reg.intercept_
+beta = reg.coef_
+
+dfReg['predict'] = reg.predict(X)
+
+##############################
+plt.scatter(dfReg['year'], y,  color='black', s=1)
+plt.plot(dfReg['year'], dfReg['predict'], color='blue', linewidth=1)
+plt.show()
 
 #%% GRAPHS
 plt.figure(figsize=[9, 9])
 
+# Main lines
 g = sns.scatterplot(x='year', y='days', data=df, alpha=1.0, color='#95d0fc', label='Days of Winter Ice') #size='daysFromMedianAbs'
-g = sns.lineplot(x='year', y='daysRollAvg5', data=df, color='black', linewidth=2.0, label='Five-Year Rolling Average')
-#g = sns.lineplot(x='year', y='daysRollAvg10', data=df, color='black', linewidth=2.0, label='Ten-Year Rolling Average')
-#g = sns.lineplot(x='year', y='daysRollAvg5', data=df.loc[df['year'] <= 1980], color='black', linewidth=2.0, label='Five-Year Rolling Average')
-#g = sns.lineplot(x='year', y='daysRollAvg5', data=df.loc[df['year'] >= 1980], color='r', linewidth=2.0) #add red overlay...
-# counterfactual
-g = sns.lineplot(x='year', y='cfRollAvg5', data=df, color='#46647a', alpha=0.8, linewidth=2.0, label='counterfactual')
+g = sns.lineplot(x='year', y='daysRoll5Avg', data=df, color='black', linewidth=2.0, label='Five-Year Rolling Average')
+#g = sns.lineplot(x='year', y='cfRoll5Avg', data=df, color='#46647a', alpha=0.8, linewidth=2.0, label='counterfactual')
 
-#plt.axhline(y=medianAllYears, xmin=0.01, xmax=0.99, color='0.5', linewidth=1.5, ls='--', label='Median (1855-2018)')
+# Median lines
+labelPreCutoff = 'Median (1855-' + str(cutoffYear) + ')'
+labelPostCutoff = 'Median (' + str(cutoffYear + 1) + '-2017)'
+plt.hlines(y=medianPreCutoff, xmin=min(df['year']), xmax=cutoffYear+0.5, color='#194f90', linewidth=1.0, linestyle='--', label=labelPreCutoff)
+plt.hlines(y=medianPostCutoff, xmin=cutoffYear+0.5, xmax=max(df['year']), color='#de4307', linewidth=1.0, linestyle='--', label=labelPostCutoff)
 
-# span to mark min/max of rolling average pre-1980
-plt.axhspan(ymin=minDaysPre1980, ymax=maxDaysPre1980, xmin=0.01, xmax=0.99, color='#95d0fc', alpha=0.1) #, label='Range of Average Days of Ice (1855-1979)')
-plt.axhline(y=minDaysPre1980, xmin=0.01, xmax=0.99, color='#95d0fc', alpha=0.5, linewidth=0.3)
-plt.axhline(y=maxDaysPre1980, xmin=0.01, xmax=0.99, color='#95d0fc', alpha=0.5, linewidth=0.3)
-# hack for legend: darker shading but no actual plotting
-plt.axhspan(ymin=minDaysPre1980, ymax=maxDaysPre1980, xmin=0, xmax=0, color='#95d0fc', alpha=0.4, label='Range of Average Days of Ice (1855-1979)')
+# Fill between min/max pre-cutoff values
+g.fill_between(x=df['year'], y1=minDaysPreCutoff, y2=maxDaysPreCutoff, facecolor='#95d0fc', alpha=0.1) #linestyle='-', linewidth=5
+# FIXME: Line border on fill_between not working? add manually
+plt.hlines(y=minDaysPreCutoff, xmin=min(df['year']), xmax=max(df['year']), color='#95d0fc', alpha=0.5, linewidth=0.3)
+plt.hlines(y=maxDaysPreCutoff, xmin=min(df['year']), xmax=max(df['year']), color='#95d0fc', alpha=0.5, linewidth=0.3)
+# Hack for legend; note 'where=False' argument
+labelRange = 'Range of Average Days of Ice (1855-' + str(cutoffYear) + ')'
+g.fill_between(x=df['year'], y1=minDaysPreCutoff, y2=maxDaysPreCutoff, where=False, facecolor='#95d0fc', alpha=0.4, label=labelRange)
 
-# add h-line extending to 1980
-# use axis limits to put line at correct % of axis
-axes = plt.gca()
-xlim = axes.get_xlim()
-ylim = axes.get_ylim()
-
-# median lines
-plt.axhline(y=medianPre1980, xmin=0.01, xmax=(1980-xlim[0])/(xlim[1]-xlim[0]), color='#194f90', linewidth=1.0, ls='--', label='Median (1855-1979)')
-plt.axhline(y=medianPost1980, xmin=(1980-xlim[0])/(xlim[1]-xlim[0]), xmax=0.99, color='#de4307', linewidth=1.0, ls='--', label='Median (1980-2018)')
-
-
-# COMPARISON TO HIST MEDIAN
-#g = sns.lineplot(x='year', y='daysFromHistMedian', data=df, color='0.7', label='Annual Ice Days\nDifference from 1855-1979 Median')
-#g = sns.lineplot(x='year', y='daysFromHistMedianRollAvg5', data=df.loc[df['year'] <= 1980], color='b', label='Five-Year Rolling Average (1855-1979)')
-#g = sns.lineplot(x='year', y='daysFromHistMedianRollAvg5', data=df.loc[df['year'] >= 1980], color='r', label='Five-Year Rolling Average (1980-2018)')
-#plt.axhline(y=0, xmin=0.01, xmax=0.99, color='0', linewidth=0.75)
+# Regression line
+labelReg = 'Regression (y=Five-Year Rolling Average; x=[Year, Post-' + str(cutoffYear) + ', Year*Post-' + str(cutoffYear) + '])'
+g = sns.lineplot(x='year', y='predict', data=dfReg.loc[dfReg['year'] <= cutoffYear], color='0.5', linewidth=1.0, label=labelReg)
+g = sns.lineplot(x='year', y='predict', data=dfReg.loc[dfReg['year'] > cutoffYear], color='0.5', linewidth=1.0)
 
 # legend
 handles, labels = g.get_legend_handles_labels()
-
-# put scatterplot elements first
-while str(type(handles[-1])) == "<class 'matplotlib.collections.PathCollection'>":
-    handles.insert(0, handles.pop())
-    labels.insert(0, labels.pop())
-
+# Put scatterplot elements first
+labelsToMove = ['Days of Winter Ice'] # ['Days of Winter Ice', labelRange]
+for l in reversed(labelsToMove): 
+    #iterate in reverse order, so items are moved to front in element as specified in list
+    i = labels.index(l)
+    labels.insert(0, labels.pop(i))
+    handles.insert(0, handles.pop(i))
 g.legend(handles=handles[0:], labels=[x.capitalize() if x.islower() else x for x in labels][0:],
          loc='lower left')
 
+# Title, labels, source
 g.set(xlabel='Year\n(First Calendar Year of Winter Season)', ylabel='Ice Days') #title='Ice Days\nWinters beginning 1855-2018',
 plt.title('Days of Ice on Lake Mendota\nWinters of 1855/56 to 2017/18', fontdict={'fontsize': 12, 'fontweight':'bold'})
 plt.text(-0.1, -0.18, 'Source: University of Wisconsin-Madison\nAtmospheric and Oceanic Studies\nhttp://www.aos.wisc.edu/~sco/lakes/Mendota-ice.html', transform=g.transAxes)
@@ -147,18 +171,21 @@ sns.despine()
 plt.savefig('fig1.svg', bbox_inches='tight')
 
 plt.show()
-
+print('... it worked!')
 #%% COMPARISON TO HIST MEDIAN
 plt.figure(figsize=[9, 9])
 
-g = sns.scatterplot(x='year', y='daysFromHistMedian', data=df, color='#95d0fc', label='Annual Ice Days\nDifference from 1855-1979 Median')
-g = sns.lineplot(x='year', y='daysFromHistMedianRollAvg5', data=df.loc[df['year'] <= 1980], color='#194f90', linewidth=2.0, label='Five-Year Rolling Average (1855-1979)')
-g = sns.lineplot(x='year', y='daysFromHistMedianRollAvg5', data=df.loc[df['year'] >= 1980], color='#de4307', linewidth=2.0, label='Five-Year Rolling Average (1980-2018)')
+g = sns.scatterplot(x='year', y='daysFromHistMedian', data=df, color='#95d0fc', label='Annual Ice Days\nDifference from Historic Median')
+g = sns.lineplot(x='year', y='daysFromHistMedianRoll5Avg', data=df.loc[df['year'] <= cutoffYear], color='#194f90', linewidth=2.0, label='Five-Year Rolling Average (Historic)')
+g = sns.lineplot(x='year', y='daysFromHistMedianRoll5Avg', data=df.loc[df['year'] >= cutoffYear], color='#de4307', linewidth=2.0, label='Five-Year Rolling Average (Current)')
 plt.axhline(y=0, xmin=0.01, xmax=0.99, color='0', linewidth=1.0)
 
 
 # legend
 handles, labels = g.get_legend_handles_labels()
+labels.insert(0, labels.pop())
+handles.insert(0, handles.pop())
+
 g.legend(handles=handles[0:], labels=[x.capitalize() if x.islower() else x for x in labels][0:],
          loc='lower left')
 
@@ -172,46 +199,18 @@ plt.show()
 
 #%% TESTING TWO Y AXES
 
-df['startRollAvg5'] = df['start_day'].rolling(5).mean()
-df['endRollAvg5'] = df['end_day'].rolling(5).mean()
+df['startRoll5Avg'] = df['start_day'].rolling(5).mean()
+df['endRoll5Avg'] = df['end_day'].rolling(5).mean()
 
-df.plot.line(x='year', y=['start_day', 'end_day', 'startRollAvg5', 'endRollAvg5'])
+df.plot.line(x='year', y=['start_day', 'end_day', 'startRoll5Avg', 'endRoll5Avg'])
 plt.show()
 
 
-g = sns.lineplot(x='year', y='startRollAvg5', data=df, label='Average Start Day (5-Year Avg.)', legend=False)
-g = sns.lineplot(x='year', y='endRollAvg5', data=df, label='Average End Day (5-Year Avg.)', legend=False)
+g = sns.lineplot(x='year', y='startRoll5Avg', data=df, label='Average Start Day (5-Year Avg.)', legend=False)
+g = sns.lineplot(x='year', y='endRoll5Avg', data=df, label='Average End Day (5-Year Avg.)', legend=False)
 g2 = g.twinx()
-g = sns.lineplot(x='year', y='daysRollAvg5', data=df, color='black', ax=g2, linewidth=2.0, label='Days of Ice (5-Year Avg.)', legend=False)
+g = sns.lineplot(x='year', y='daysRoll5Avg', data=df, color='black', ax=g2, linewidth=2.0, label='Days of Ice (5-Year Avg.)', legend=False)
 g.legend(loc='lower left', bbox_to_anchor=[1.01, 0])
 # FIXME: how to get all legends to appear?
 plt.show()
 
-
-
-#%% REGRESSIONS
-
-from sklearn.linear_model import LinearRegression
-
-df['pre1980'] = df['year'] < 1980
-
-xVars = ['year', 'pre1980']
-yVar = 'daysRollAvg5'
-allVars = xVars.copy()
-allVars.append(yVar)
-
-#FIXME
-X = df.loc[df[allVars].notnull(), xVars] #dataframe
-y = df.loc[df[allVars].notnull(), yVar] #series
-
-#df2 = df.loc[~(df['daysRollAvg5'].isnull())].copy()
-
-reg = LinearRegression().fit(X, y)
-beta0 = reg.intercept_
-beta1 = reg.coef_
-
-df['predict'] = reg.predict(X)
-a = df[['year', 'daysRollAvg5', 'predict']]
-
-df.plot.line('year', ['daysRollAvg5', 'predict'])
-plt.show()
